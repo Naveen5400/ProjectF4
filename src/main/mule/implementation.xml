@@ -1,0 +1,352 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+<flow name="GetAllFlow" doc:id="9ac086cd-6dc2-4d28-a93c-384347ee1aa9" >
+		<db:select doc:name="Select" doc:id="96575566-b3e3-4bcd-84b6-9728b33e8ee1" config-ref="Database_Config">
+			<db:sql ><![CDATA[select * from customers ]]></db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="ee70dcaa-cf14-473b-9f51-73446de4ecd9">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload map ( payload01 , indexOfPayload01 ) -> {
+	"customerNumber?": payload01.customerNumber,
+	customerName: payload01.customerName,
+	phone: payload01.Phone,
+	city: payload01.City,
+	state: payload01.State default "",
+	postalCode: payload01.postalCode as Number default 0,
+	Country: payload01.Country default ""
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="1d3e333d-a66a-4b81-bc06-ea4ab02d86f1" type="EXPRESSION">
+				<ee:transform doc:name="Transform Message" doc:id="6ced5628-ad28-4532-81d0-a44abc3859c8" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Invalid Expression"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	
+</flow>
+	<sub-flow name="VariableSub_Flow" doc:id="a5d75e77-5a3b-4a9a-aa54-be55fd6df791" >
+		<set-variable value="#[message.payload.customerName]" doc:name="name " doc:id="f1c505d4-9415-4c39-a570-16af5c1798e7" variableName="name "/>
+		<set-variable value="#[message.payload.phone]" doc:name="phone" doc:id="5ccd18fc-a184-444f-8842-36f7326030f0" variableName="phone"/>
+		<set-variable value="#[message.payload.city]" doc:name="city" doc:id="59e18512-0af9-437a-8f79-d48396cb1c3d" variableName="city"/>
+		<set-variable value="#[message.payload.state]" doc:name="state" doc:id="c69830ff-545b-4f74-bc14-c95895aa603d" variableName="state"/>
+		<set-variable value="#[message.payload.postalCode]" doc:name="pincode" doc:id="19ee33b4-c82f-474f-b54a-4bc780d8b4e7" variableName="pincode"/>
+		<set-variable value="#[message.payload.Country]" doc:name="country" doc:id="90ae2a93-78c7-4ee4-88d0-bcb22c49b45a" variableName="country"/>
+	</sub-flow>
+	<flow name="PostFlow" doc:id="bcb11053-5fd7-4309-83aa-2b29e5a81af5" >
+		<flow-ref doc:name="Flow Reference" doc:id="4edc0075-7bc3-49ea-86a4-16c0beb7272a" name="VariableSub_Flow"/>
+		<db:query-single doc:name="Query single" doc:id="f3689cb4-e754-4c8e-bb34-31cf2380772b" config-ref="Database_Config">
+			<db:sql ><![CDATA[select max(customerNumber) from customers]]></db:sql>
+		</db:query-single>
+		<set-variable value='#["C"++((payload."max(customerNumber)"[1 to 5] as Number)+1)]' doc:name="custId" doc:id="882f9ef8-c39c-49b4-9e3f-3e4e501aaa72" variableName="custId"/>
+		<db:insert doc:name="Insert" doc:id="1a32cce3-4b27-4f9d-8471-0615f3320cec" config-ref="Database_Config">
+			<db:sql ><![CDATA[insert into customers(customerNumber, customerName, Phone, City, State, postalCode, Country) values(:a, :b, :c, :d, :e, :f, :g) ]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	a : vars.custId,
+	b : vars.name,
+	c : vars.phone,
+	d : vars.city,
+	e : vars.state,
+	f : vars.pincode,
+	g : vars.country
+}]]]></db:input-parameters>
+		</db:insert>
+		<choice doc:name="Choice" doc:id="fab63c99-9165-4f7b-9b26-73507e5f0763" >
+			<when expression="#[payload.affectedRows !=0]">
+				<ee:transform doc:name="Transform Message" doc:id="d21332c2-6ecf-4b14-b7b4-6aad4d94de21">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "The new customer is created successfully"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="0f49ec35-3c16-4000-bf8d-94ed91070b74" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Invalid Customer Number"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value="500" doc:name="Set Variable" doc:id="92caa145-b2de-48c0-b21e-c071d7ae5e4e" variableName="httpStatus"/>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="5b52fac0-13fd-43f8-a56b-fd62df65960a" type="EXPRESSION">
+				<ee:transform doc:name="Transform Message" doc:id="c5c80980-5e41-4194-847a-730cf1c121ac" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Invalid Expression"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	
+</flow>
+	<flow name="GetByIDFlow" doc:id="24f7f9bc-8981-40f3-baab-5053d3b86e8c" >
+		<db:query-single doc:name="Query single" doc:id="699e2b36-c825-4c9c-9780-92fcd6a23331" config-ref="Database_Config">
+			<db:sql ><![CDATA[select * from customers where customerNumber = :a]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	a : vars.customerNumber
+}]]]></db:input-parameters>
+		</db:query-single>
+		<choice doc:name="Choice" doc:id="a5e2fed7-98a8-4da5-81a4-64438247e475" >
+			<when expression="#[sizeOf(payload)&gt;0]">
+				<ee:transform doc:name="Transform Message" doc:id="daa60574-6da5-4058-8631-256cb7664289">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"customerNumber?": payload.customerNumber,
+	customerName: payload.customerName,
+	phone: payload.Phone,
+	city: payload.City,
+	state: payload.State default "",
+	postalCode: payload.postalCode as Number default 0,
+	Country: payload.Country default ""
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="15dda280-ac7b-4b8f-bd53-002da8f6b6a5" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Invalid Customer Number"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value="500" doc:name="Set Variable" doc:id="7b7f3289-8181-435a-bcbe-abb94a768ea5" variableName="httpStatus"/>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="3131b9ad-3e78-4e55-bbda-ee66a164cd95" type="EXPRESSION">
+				<ee:transform doc:name="Transform Message" doc:id="eff62e64-6470-4d77-a605-8b6afdaef737" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Invalid Expression"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	
+</flow>
+	<flow name="DeleteFlow" doc:id="c6c39d6c-37f8-46f6-b4e2-6da2e3ade39e" >
+		<db:delete doc:name="Delete" doc:id="96e40ec3-f20f-4376-a2c7-29211e4ae7d8" config-ref="Database_Config">
+			<db:sql ><![CDATA[delete from customers where customerNumber = :a]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	a : vars.customerNumber
+}]]]></db:input-parameters>
+		</db:delete>
+		<choice doc:name="Choice" doc:id="f17e632d-735e-4815-bd8b-9d2802959add" >
+			<when expression="#[sizeOf(payload)&gt;0]">
+				<ee:transform doc:name="Transform Message" doc:id="5636cc93-9422-4d2f-bf8b-2a02844ec8b8">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "customer account has been deleted "
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="ef9dbd0c-020f-4a6f-bbb2-29cb94725257" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Invalid Customer Number"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value="500" doc:name="Set Variable" doc:id="634f7b3e-021c-402b-b737-fe367f82ee20" variableName="httpStatus"/>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="08546827-91c7-4ab1-ba55-640496e62d49" type="EXPRESSION">
+				<ee:transform doc:name="Transform Message" doc:id="f85d5b61-cf6d-4854-be4a-18f2b86b9a41" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Invalid Expression"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	
+</flow>
+	<flow name="PutFlow" doc:id="253f1f2c-6cf2-49a4-81bc-e814163959e1" >
+		<flow-ref doc:name="Flow Reference" doc:id="2e3d3a30-5d7a-488c-b7e8-8272d460cca2" name="VariableSub_Flow"/>
+		<db:query-single doc:name="Query single" doc:id="d3cf98d4-7123-4598-91ae-78a923ae40d8" config-ref="Database_Config">
+			<db:sql ><![CDATA[select * from customers where customerNumber = :a]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	a : vars.customerNumber
+}]]]></db:input-parameters>
+		</db:query-single>
+		<choice doc:name="Choice" doc:id="7260b177-2611-43a6-b14f-6420f83006ec" >
+			<when expression="#[sizeOf(payload)&gt;0]">
+				<db:update doc:name="Update" doc:id="8c6bbb41-3269-4f0e-a8e4-21e203ea3c9c" config-ref="Database_Config">
+					<db:sql ><![CDATA[update customers set customerName = :a, Phone = :b, City = :c, State = :d, postalCode = :e, Country = :f where customerNumber = :g]]></db:sql>
+					<db:input-parameters ><![CDATA[#[{
+	a : vars.name,
+	b : vars.phone,
+	c : vars.city,
+	d : vars.state,
+	e : vars.pincode,
+	f : vars.country,
+	g : vars.customerNumber
+}]]]></db:input-parameters>
+				</db:update>
+				<ee:transform doc:name="Transform Message" doc:id="38bafb52-07ae-4b80-8dc8-d7bef5a3c172" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Customer details has been updated successfully"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<db:query-single doc:name="Query single" doc:id="0eb84ddb-80d6-4055-9674-86606addae6c" config-ref="Database_Config">
+					<db:sql ><![CDATA[select max(customerNumber) from customers]]></db:sql>
+				</db:query-single>
+				<set-variable doc:name="customId" doc:id="fe69dd44-8c29-4e21-a0ce-570ecf928a0e" variableName="customId" value='#["C"++((payload."max(customerNumber)"[1 to 5] as Number)+1)]'/>
+				<db:insert doc:name="Insert" doc:id="1434ff90-0d6c-4b68-8475-ff627140cc92" config-ref="Database_Config">
+					<db:sql ><![CDATA[insert into customers(customerNumber, customerName, Phone, City, State, postalCode, Country) values(:a, :b, :c, :d, :e, :f, :g)]]></db:sql>
+					<db:input-parameters ><![CDATA[#[{
+	a : vars.customId,
+	b : vars.name,
+	c : vars.phone,
+	d : vars.city,
+	e : vars.state,
+	f : vars.pincode,
+	g : vars.country
+}]]]></db:input-parameters>
+				</db:insert>
+				<ee:transform doc:name="Transform Message" doc:id="c03720fc-163b-460f-9b2a-957082b37c0a" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json 
+---
+{
+	message : "customer account has been created successfully"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="227129d2-7786-49a8-bc27-4f869571283f" type="EXPRESSION">
+				<ee:transform doc:name="Transform Message" doc:id="6f9411e7-00d0-4ae3-8039-437f28e8b7dd" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Invalid Expression"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	
+</flow>
+	<flow name="PatchFlow" doc:id="62a76e00-227d-4b3c-a019-11fe9280d1af" >
+		<flow-ref doc:name="Flow Reference" doc:id="a19dba9f-c181-4e2c-9f71-16038074a4f0" name="VariableSub_Flow"/>
+		<db:update doc:name="Update" doc:id="941c35d4-ef81-40d8-bee0-ac13bf510b83" config-ref="Database_Config">
+			<db:sql ><![CDATA[update customers set Phone = :a where customerNumber = :b]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	a : vars.phone,
+	b : vars.customerNumber
+}]]]></db:input-parameters>
+		</db:update>
+		<choice doc:name="Choice" doc:id="61cb5c35-129d-4a40-9e7a-fb9d36be6922" >
+			<when expression="#[payload.affectedRows !=0]">
+				<ee:transform doc:name="Transform Message" doc:id="90ad28c9-78f5-4bea-886f-cf40233aaa8b">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Customers details created successfully"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="293dbf83-e1f9-4cca-892e-dd4cfef096a2" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Invalid Customer Number"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value="500" doc:name="Set Variable" doc:id="3ab0c86a-7373-4e45-99c6-f0c10eaa5353" variableName="httpStatus"/>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="6a58b128-cf01-4e2c-a352-42e251f6240d" type="EXPRESSION">
+				<ee:transform doc:name="Transform Message" doc:id="ebb5f45c-986b-4722-a21e-a7a7d2436a4a" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "Invalid Expression"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	
+</flow>
+
+
+</mule>

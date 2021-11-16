@@ -1,0 +1,13 @@
+%dw 2.0
+
+type auto_bcb11053_5fd7_4309_83aa_2b29e5a81af5_Input_Payload = {
+  phone: String, 
+  city: String, 
+  postalCode: Number, 
+  Country: String, 
+  state: String, 
+  customerNumber?: String, 
+  customerName: String, 
+  _?: Any
+}
+

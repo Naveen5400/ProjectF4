@@ -1,0 +1,8 @@
+http:
+   port: "8085"
+db: 
+ host: "35.200.179.81"
+ port: "3306"
+ user: "root"
+ database: "Project"
+ password: "project@1234"
